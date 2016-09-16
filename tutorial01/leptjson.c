@@ -21,7 +21,7 @@ static int lept_parse_null(lept_context* c, lept_value* v) {
         return LEPT_PARSE_INVALID_VALUE;
     c->json += 3;
     v->type = LEPT_NULL;
-    return 0;
+    return LEPT_PARSE_OK;
 }
 
 static int lept_parse_true(lept_context* c, lept_value* v) {
@@ -30,7 +30,7 @@ static int lept_parse_true(lept_context* c, lept_value* v) {
         return LEPT_PARSE_INVALID_VALUE;
     c->json += 3;
     v->type = LEPT_TRUE;
-    return 0;
+    return LEPT_PARSE_OK;
 }
 
 static int lept_parse_false(lept_context* c, lept_value* v) {
