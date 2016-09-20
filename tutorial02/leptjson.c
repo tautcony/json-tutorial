@@ -65,7 +65,6 @@ static int lept_parse_number_validate(lept_context* c) {
     LEPT_PARSE_NUMBER_STATE state = LEPT_PARSE_NUMBER_STATE_BEGIN;
     int i;
     char ch;
-    printf("BEGIN: %s\n", c->json);
     for (i = 0; c->json[i] != '\0'; ++i) {
         ch = c->json[i];
         /*printf("%c %s\n", c->json[i-1], LEPT_PARSE_NUMBER_STATE_STRING[state]);*/
@@ -81,10 +80,10 @@ static int lept_parse_number_validate(lept_context* c) {
                     default: state = LEPT_PARSE_NUMBER_STATE_INVALID; break;
                 }
                 break;
-            case LEPT_PARSE_NUMBER_STATE_INVALID: printf("INVALID\n"); return 0;
-            case LEPT_PARSE_NUMBER_STATE_FIN: printf("FIN!\n");return i;
+            case LEPT_PARSE_NUMBER_STATE_INVALID: return 0;
+            case LEPT_PARSE_NUMBER_STATE_FIN: return i - 1;
             case LEPT_PARSE_NUMBER_STATE_PRECEDING_ZERO:
-                if ((!ISNUMBERPART(ch)) || ISDIGIT(ch)) {
+                if ((!ISNUMBERPART(ch)) || ISDIGIT(ch) || ch == '-') {
                     state = LEPT_PARSE_NUMBER_STATE_FIN; /* Lead result to LEPT_PARSE_ROOT_NOT_SINGULAR */
                     assert(i == 1);
                     break;
@@ -142,19 +141,19 @@ static int lept_parse_number_validate(lept_context* c) {
         }
     }
     if (state == LEPT_PARSE_NUMBER_STATE_DOT) return 0;
-    /*printf("END STATE: %s\n", LEPT_PARSE_NUMBER_STATE_STRING[state]);*/
     return i;
 }
 
 static int lept_parse_number(lept_context* c, lept_value* v) {
     int length = lept_parse_number_validate(c);
-    if (length == 0)
-        return LEPT_PARSE_INVALID_VALUE;
+    if (length == 0) return LEPT_PARSE_INVALID_VALUE;
     v->n = strtod(c->json, NULL);
-    if (v->n == HUGE_VAL || v->n == -HUGE_VAL)
-        return LEPT_PARSE_NUMBER_TOO_BIG;
     c->json += length;
     v->type = LEPT_NUMBER;
+    if (v->n == HUGE_VAL || v->n == -HUGE_VAL) {
+        v->type = LEPT_NULL;
+        return LEPT_PARSE_NUMBER_TOO_BIG;
+    }
     return LEPT_PARSE_OK;
 }
 
