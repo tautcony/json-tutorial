@@ -1,8 +1,12 @@
 #include "leptjson.h"
 #include <assert.h>  /* assert() */
 #include <stdlib.h>  /* NULL, strtod() */
+#include <math.h>    /* HUGE_VAL */
 
 #define EXPECT(c, ch)       do { assert(*c->json == (ch)); c->json++; } while(0)
+#define ISDIGIT(ch)         ((ch) >= '0' && (ch) <= '9')
+#define ISDIGIT1TO9(ch)     ((ch) >= '1' && (ch) <= '9')
+#define ISNUMBERPART(ch)     (ISDIGIT(ch) || (ch) == '+' || (ch) == '-' || (ch) == 'e' || (ch) == 'E' || (ch) == '.')
 
 typedef struct {
     const char* json;
@@ -14,51 +18,152 @@ static void lept_parse_whitespace(lept_context* c) {
         p++;
     c->json = p;
 }
-
-static int lept_parse_true(lept_context* c, lept_value* v) {
-    EXPECT(c, 't');
-    if (c->json[0] != 'r' || c->json[1] != 'u' || c->json[2] != 'e')
+#include <stdio.h>
+static int lept_parse_literal(lept_context* c, lept_value* v) {
+    switch (c->json[0]) {
+    case 'n':
+        if (c->json[1] != 'u' || c->json[2] != 'l' || c->json[3] != 'l')
+            return LEPT_PARSE_INVALID_VALUE;
+        c->json += 4;
+        v->type = LEPT_NULL;
+        break;
+    case 't':
+        if (c->json[1] != 'r' || c->json[2] != 'u' || c->json[3] != 'e')
+            return LEPT_PARSE_INVALID_VALUE;
+        c->json += 4;
+        v->type = LEPT_TRUE;
+        break;
+    case 'f':
+        if (c->json[1] != 'a' || c->json[2] != 'l' || c->json[3] != 's' || c->json[4] != 'e')
+            return LEPT_PARSE_INVALID_VALUE;
+        c->json += 5;
+        v->type = LEPT_FALSE;
+        break;
+    default:
         return LEPT_PARSE_INVALID_VALUE;
-    c->json += 3;
-    v->type = LEPT_TRUE;
+    }
     return LEPT_PARSE_OK;
 }
 
-static int lept_parse_false(lept_context* c, lept_value* v) {
-    EXPECT(c, 'f');
-    if (c->json[0] != 'a' || c->json[1] != 'l' || c->json[2] != 's' || c->json[3] != 'e')
-        return LEPT_PARSE_INVALID_VALUE;
-    c->json += 4;
-    v->type = LEPT_FALSE;
-    return LEPT_PARSE_OK;
-}
+typedef enum {
+    LEPT_PARSE_NUMBER_STATE_BEGIN, LEPT_PARSE_NUMBER_STATE_INVALID, LEPT_PARSE_NUMBER_STATE_FIN,
+    LEPT_PARSE_NUMBER_STATE_PRECEDING_ZERO, LEPT_PARSE_NUMBER_STATE_PRECEDING_MINUS,
+    LEPT_PARSE_NUMBER_STATE_INTEGER, LEPT_PARSE_NUMBER_STATE_DOT, LEPT_PARSE_NUMBER_STATE_DECIMAL,
+    LEPT_PARSE_NUMBER_STATE_EXPO, LEPT_PARSE_NUMBER_STATE_EXPO_PRECEDING_SIGN,
+    LEPT_PARSE_NUMBER_STATE_EXPO_INTEGER
+} LEPT_PARSE_NUMBER_STATE;
 
-static int lept_parse_null(lept_context* c, lept_value* v) {
-    EXPECT(c, 'n');
-    if (c->json[0] != 'u' || c->json[1] != 'l' || c->json[2] != 'l')
-        return LEPT_PARSE_INVALID_VALUE;
-    c->json += 3;
-    v->type = LEPT_NULL;
-    return LEPT_PARSE_OK;
+const char* LEPT_PARSE_NUMBER_STATE_STRING[] = {
+    "STATE_BEGIN", "STATE_INVALID", "STATE_FIN",
+    "STATE_PRECEDING_ZERO", "STATE_PRECEDING_MINUS",
+    "STATE_INTEGER", "STATE_DOT", "STATE_DECIMAL",
+    "STATE_EXPO", "STATE_EXPO_PRECEDING_SIGN",
+    "STATE_EXPO_INTEGER"
+};
+
+static int lept_parse_number_validate(lept_context* c) {
+    LEPT_PARSE_NUMBER_STATE state = LEPT_PARSE_NUMBER_STATE_BEGIN;
+    int i;
+    char ch;
+    for (i = 0; c->json[i] != '\0'; ++i) {
+        ch = c->json[i];
+        /*printf("%c %s\n", c->json[i-1], LEPT_PARSE_NUMBER_STATE_STRING[state]);*/
+        switch (state) {
+            case LEPT_PARSE_NUMBER_STATE_BEGIN:
+                if (ISDIGIT1TO9(ch)) {
+                    state = LEPT_PARSE_NUMBER_STATE_INTEGER;
+                    break;
+                }
+                switch (ch) {
+                    case '-': state = LEPT_PARSE_NUMBER_STATE_PRECEDING_MINUS; break;
+                    case '0': state = LEPT_PARSE_NUMBER_STATE_PRECEDING_ZERO;  break;
+                    default: state = LEPT_PARSE_NUMBER_STATE_INVALID; break;
+                }
+                break;
+            case LEPT_PARSE_NUMBER_STATE_INVALID: return 0;
+            case LEPT_PARSE_NUMBER_STATE_FIN: return i - 1;
+            case LEPT_PARSE_NUMBER_STATE_PRECEDING_ZERO:
+                if ((!ISNUMBERPART(ch)) || ISDIGIT(ch) || ch == '-') {
+                    state = LEPT_PARSE_NUMBER_STATE_FIN; /* Lead result to LEPT_PARSE_ROOT_NOT_SINGULAR */
+                    assert(i == 1);
+                    break;
+                }
+                switch (ch) {
+                    case '.': state = LEPT_PARSE_NUMBER_STATE_DOT; break;
+                    case 'e': case 'E': state = LEPT_PARSE_NUMBER_STATE_EXPO; break;
+                    default: state = LEPT_PARSE_NUMBER_STATE_INVALID; break;
+                }
+                break;
+            case LEPT_PARSE_NUMBER_STATE_PRECEDING_MINUS:
+                if (ch == '0') state = LEPT_PARSE_NUMBER_STATE_PRECEDING_ZERO;
+                else if (ISDIGIT1TO9(ch)) state = LEPT_PARSE_NUMBER_STATE_INTEGER;
+                else state = LEPT_PARSE_NUMBER_STATE_INVALID;
+                break;
+            case LEPT_PARSE_NUMBER_STATE_INTEGER:
+                if (!ISNUMBERPART(ch)) {
+                   state = LEPT_PARSE_NUMBER_STATE_FIN;
+                   break;
+                }
+                switch (ch) {
+                    case '.': state = LEPT_PARSE_NUMBER_STATE_DOT; break;
+                    case 'e': case 'E': state = LEPT_PARSE_NUMBER_STATE_EXPO; break;
+                    default: state = LEPT_PARSE_NUMBER_STATE_INVALID; break;
+                }
+                break;
+            case LEPT_PARSE_NUMBER_STATE_DOT:
+                if (ISDIGIT(ch)) state = LEPT_PARSE_NUMBER_STATE_DECIMAL;
+                else state = LEPT_PARSE_NUMBER_STATE_INVALID;
+                break;
+            case LEPT_PARSE_NUMBER_STATE_DECIMAL:
+                if (ch == 'e' || ch == 'E') state = LEPT_PARSE_NUMBER_STATE_EXPO;
+                else if (!ISNUMBERPART(ch)) {
+                   state = LEPT_PARSE_NUMBER_STATE_FIN;
+                   break;
+                }
+                else if (ISDIGIT(ch)) break;
+                else state = LEPT_PARSE_NUMBER_STATE_INVALID;
+                break;
+            case LEPT_PARSE_NUMBER_STATE_EXPO:
+                if (ch == '+' || ch == '-') state = LEPT_PARSE_NUMBER_STATE_EXPO_PRECEDING_SIGN;
+                else if (ISDIGIT(ch)) state = LEPT_PARSE_NUMBER_STATE_EXPO_INTEGER;
+                else state = LEPT_PARSE_NUMBER_STATE_INVALID;
+                break;
+            case LEPT_PARSE_NUMBER_STATE_EXPO_PRECEDING_SIGN:
+                if (ISDIGIT(ch)) state = LEPT_PARSE_NUMBER_STATE_EXPO_INTEGER;
+                else state = LEPT_PARSE_NUMBER_STATE_INVALID;
+                break;
+            case LEPT_PARSE_NUMBER_STATE_EXPO_INTEGER:
+                if (!ISNUMBERPART(ch)) {
+                   state = LEPT_PARSE_NUMBER_STATE_FIN;
+                   break;
+                }
+                break;
+        }
+    }
+    if (state == LEPT_PARSE_NUMBER_STATE_DOT) return 0;
+    return i;
 }
 
 static int lept_parse_number(lept_context* c, lept_value* v) {
-    char* end;
-    /* \TODO validate number */
-    v->n = strtod(c->json, &end);
-    if (c->json == end)
-        return LEPT_PARSE_INVALID_VALUE;
-    c->json = end;
+    int length = lept_parse_number_validate(c);
+    if (length == 0) return LEPT_PARSE_INVALID_VALUE;
+    v->n = strtod(c->json, NULL);
+    c->json += length;
     v->type = LEPT_NUMBER;
+    if (v->n == HUGE_VAL || v->n == -HUGE_VAL) {
+        v->type = LEPT_NULL;
+        return LEPT_PARSE_NUMBER_TOO_BIG;
+    }
     return LEPT_PARSE_OK;
 }
 
 static int lept_parse_value(lept_context* c, lept_value* v) {
     switch (*c->json) {
-        case 't':  return lept_parse_true(c, v);
-        case 'f':  return lept_parse_false(c, v);
-        case 'n':  return lept_parse_null(c, v);
-        default:   return lept_parse_number(c, v);
+        case 't': case 'f': case 'n': return lept_parse_literal(c, v);
+        case '0': case '1': case '2': case '3': case '4':
+        case '5': case '6': case '7': case '8': case '9':
+        case '-': return lept_parse_number(c, v);
+        default: return LEPT_PARSE_INVALID_VALUE;
         case '\0': return LEPT_PARSE_EXPECT_VALUE;
     }
 }
