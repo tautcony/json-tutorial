@@ -156,14 +156,13 @@ static int lept_parse_string(lept_context* c, lept_value* v) {
                         if (!(p = lept_parse_hex4(p, &u)))
                             STRING_ERROR(LEPT_PARSE_INVALID_UNICODE_HEX);
                         if (u >= 0xD800 && u <= 0xDBFF) {
-                            if (*p++ == '\\' && *p++ == 'u') {
-                                p = lept_parse_hex4(p, &ul);
-                                if (!p) return LEPT_PARSE_INVALID_UNICODE_HEX;
-                                if (!(ul >= 0xDC00 && ul <= 0xDFFF))
-                                    return LEPT_PARSE_INVALID_UNICODE_SURROGATE;
-                                u = 0x10000 + (u - 0xD800) * 0x400 + (ul - 0xDC00);
-                            }
-                            else return LEPT_PARSE_INVALID_UNICODE_SURROGATE;
+                            if (!(*p++ == '\\' && *p++ == 'u'))
+                                STRING_ERROR(LEPT_PARSE_INVALID_UNICODE_SURROGATE);
+                            if (!(p = lept_parse_hex4(p, &ul)))
+                                STRING_ERROR(LEPT_PARSE_INVALID_UNICODE_HEX);
+                            if (!(ul >= 0xDC00 && ul <= 0xDFFF))
+                                STRING_ERROR(LEPT_PARSE_INVALID_UNICODE_SURROGATE);
+                            u = 0x10000 + (u - 0xD800) * 0x400 + (ul - 0xDC00);
                         }
                         lept_encode_utf8(c, u);
                         break;
