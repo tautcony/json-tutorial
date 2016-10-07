@@ -200,7 +200,7 @@ static int lept_parse_array(lept_context* c, lept_value* v) {
         lept_init(&e);
         lept_parse_whitespace(c);
         if ((ret = lept_parse_value(c, &e)) != LEPT_PARSE_OK) {
-            if (c->size > 0) lept_context_pop(c, c->top);
+            lept_context_pop(c, c->top);
             return ret;
         }
         lept_parse_whitespace(c);
@@ -217,7 +217,7 @@ static int lept_parse_array(lept_context* c, lept_value* v) {
             return LEPT_PARSE_OK;
         }
         else {
-            if (c->size > 0) lept_context_pop(c, c->top);
+            lept_context_pop(c, c->top);
             return LEPT_PARSE_MISS_COMMA_OR_SQUARE_BRACKET;
         }
     }
