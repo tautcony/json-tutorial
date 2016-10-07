@@ -141,7 +141,7 @@ static void test_parse_array() {
     EXPECT_EQ_INT(LEPT_NUMBER, lept_get_type(lept_get_array_element(&v, 3)));
     EXPECT_EQ_DOUBLE(123.0, lept_get_array_element(&v, 3)->u.n);
     EXPECT_EQ_INT(LEPT_STRING, lept_get_type(lept_get_array_element(&v, 4)));
-    EXPECT_EQ_STRING("abc", lept_get_array_element(&v, 4)->u.s.s, 4);
+    EXPECT_EQ_STRING("abc", lept_get_array_element(&v, 4)->u.s.s, 3);
     lept_free(&v);
 
     lept_init(&v);
