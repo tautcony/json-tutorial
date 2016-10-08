@@ -53,4 +53,6 @@ void lept_set_string(lept_value* v, const char* s, size_t len);
 size_t lept_get_array_size(const lept_value* v);
 lept_value* lept_get_array_element(const lept_value* v, size_t index);
 
+char* lept_to_string(const lept_value *v);
+
 #endif /* LEPTJSON_H__ */
