@@ -158,6 +158,7 @@ static void test_parse_array() {
             EXPECT_EQ_DOUBLE((double) j, lept_get_array_element(val_tmp, j)->u.n);
         }
     }
+    lept_free(&v);
 }
 
 #define TEST_ERROR(error, json)\
@@ -257,6 +258,7 @@ static void test_parse_miss_comma_or_square_bracket() {
     TEST_ERROR(LEPT_PARSE_MISS_COMMA_OR_SQUARE_BRACKET, "[1}");
     TEST_ERROR(LEPT_PARSE_MISS_COMMA_OR_SQUARE_BRACKET, "[1 2");
     TEST_ERROR(LEPT_PARSE_MISS_COMMA_OR_SQUARE_BRACKET, "[[]");
+    TEST_ERROR(LEPT_PARSE_MISS_COMMA_OR_SQUARE_BRACKET, "[\"a\" null ]");
 #endif
 }
 
