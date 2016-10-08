@@ -8,7 +8,7 @@
 #include <math.h>    /* HUGE_VAL */
 #include <stdlib.h>  /* NULL, malloc(), realloc(), free(), strtod() */
 #include <string.h>  /* memcpy() */
-#include<stdio.h>    /* snprintf() */
+#include <stdio.h>   /* snprintf() */
 
 #ifndef LEPT_PARSE_STACK_INIT_SIZE
 #define LEPT_PARSE_STACK_INIT_SIZE 256
@@ -184,10 +184,8 @@ static int lept_parse_string(lept_context* c, lept_value* v) {
 
 #define ARRAY_ERROR(error)\
     do {\
-        for (i = 0; i < size; ++i)\
-        {\
-            v = (lept_value*)lept_context_pop(c, sizeof(lept_value));\
-            lept_free(v);\
+        for (i = 0; i < size; ++i) {\
+            lept_free((lept_value*)lept_context_pop(c, sizeof(lept_value)));\
         }\
         return error;\
     } while(0)
@@ -335,17 +333,16 @@ lept_value* lept_get_array_element(const lept_value* v, size_t index) {
     return &v->u.a.e[index];
 }
 
-char* lept_to_string(const lept_value *v)
-{
+char* lept_to_string(const lept_value *v) {
     lept_context c;
     c.stack = NULL;
     c.size = c.top = 0;
     size_t i, arr_size, tmp_size;
     char tmp[128], *ptr_tmp;
     switch (v->type) {
-    case LEPT_NULL:  memcpy(lept_context_push(&c, sizeof(char) * 4), "null", sizeof(char) * 4); break;
+    case LEPT_NULL:  memcpy(lept_context_push(&c, sizeof(char) * 4), "null",  sizeof(char) * 4); break;
     case LEPT_FALSE: memcpy(lept_context_push(&c, sizeof(char) * 5), "false", sizeof(char) * 5); break;
-    case LEPT_TRUE:  memcpy(lept_context_push(&c, sizeof(char) * 4), "true", sizeof(char) * 4); break;
+    case LEPT_TRUE:  memcpy(lept_context_push(&c, sizeof(char) * 4), "true",  sizeof(char) * 4); break;
     case LEPT_NUMBER:
         snprintf(tmp, sizeof(tmp), "%f", v->u.n);
         tmp_size = strlen(tmp) * sizeof(char);
