@@ -8,6 +8,7 @@
 #include <math.h>    /* HUGE_VAL */
 #include <stdlib.h>  /* NULL, malloc(), realloc(), free(), strtod() */
 #include <string.h>  /* memcpy() */
+#include <stdio.h>   /* snprintf() */
 
 #ifndef LEPT_PARSE_STACK_INIT_SIZE
 #define LEPT_PARSE_STACK_INIT_SIZE 256
@@ -105,7 +106,7 @@ static const char* lept_parse_hex4(const char* p, unsigned* u) {
 }
 
 static void lept_encode_utf8(lept_context* c, unsigned u) {
-    if (u <= 0x7F) 
+    if (u <= 0x7F)
         PUTC(c, u & 0xFF);
     else if (u <= 0x7FF) {
         PUTC(c, 0xC0 | ((u >> 6) & 0xFF));
@@ -181,12 +182,21 @@ static int lept_parse_string(lept_context* c, lept_value* v) {
     }
 }
 
+#define ARRAY_ERROR(error)\
+    do {\
+        for (i = 0; i < size; ++i) {\
+            lept_free((lept_value*)lept_context_pop(c, sizeof(lept_value)));\
+        }\
+        return error;\
+    } while(0)
+
 static int lept_parse_value(lept_context* c, lept_value* v);
 
 static int lept_parse_array(lept_context* c, lept_value* v) {
-    size_t size = 0;
+    size_t size = 0, i;
     int ret;
     EXPECT(c, '[');
+    lept_parse_whitespace(c);
     if (*c->json == ']') {
         c->json++;
         v->type = LEPT_ARRAY;
@@ -197,8 +207,10 @@ static int lept_parse_array(lept_context* c, lept_value* v) {
     for (;;) {
         lept_value e;
         lept_init(&e);
+        lept_parse_whitespace(c);
         if ((ret = lept_parse_value(c, &e)) != LEPT_PARSE_OK)
-            return ret;
+            ARRAY_ERROR(ret);
+        lept_parse_whitespace(c);
         memcpy(lept_context_push(c, sizeof(lept_value)), &e, sizeof(lept_value));
         size++;
         if (*c->json == ',')
@@ -212,7 +224,7 @@ static int lept_parse_array(lept_context* c, lept_value* v) {
             return LEPT_PARSE_OK;
         }
         else
-            return LEPT_PARSE_MISS_COMMA_OR_SQUARE_BRACKET;
+            ARRAY_ERROR(LEPT_PARSE_MISS_COMMA_OR_SQUARE_BRACKET);
     }
 }
 
@@ -250,9 +262,17 @@ int lept_parse(lept_value* v, const char* json) {
 }
 
 void lept_free(lept_value* v) {
+    size_t i, arr_size;
     assert(v != NULL);
     if (v->type == LEPT_STRING)
         free(v->u.s.s);
+    else if (v->type == LEPT_ARRAY) {
+        arr_size = lept_get_array_size(v);
+        for(i = 0; i < arr_size; ++i) {
+            lept_free(lept_get_array_element(v, i));
+        }
+        if (arr_size > 0) free(v->u.a.e);
+    }
     v->type = LEPT_NULL;
 }
 
@@ -311,4 +331,48 @@ lept_value* lept_get_array_element(const lept_value* v, size_t index) {
     assert(v != NULL && v->type == LEPT_ARRAY);
     assert(index < v->u.a.size);
     return &v->u.a.e[index];
+}
+
+char* lept_to_string(const lept_value *v) {
+    lept_context c;
+    c.stack = NULL;
+    c.size = c.top = 0;
+    size_t i, arr_size, tmp_size;
+    char tmp[128], *ptr_tmp;
+    switch (v->type) {
+    case LEPT_NULL:  memcpy(lept_context_push(&c, sizeof(char) * 4), "null",  sizeof(char) * 4); break;
+    case LEPT_FALSE: memcpy(lept_context_push(&c, sizeof(char) * 5), "false", sizeof(char) * 5); break;
+    case LEPT_TRUE:  memcpy(lept_context_push(&c, sizeof(char) * 4), "true",  sizeof(char) * 4); break;
+    case LEPT_NUMBER:
+        snprintf(tmp, sizeof(tmp), "%f", v->u.n);
+        tmp_size = strlen(tmp) * sizeof(char);
+        memcpy(lept_context_push(&c, tmp_size), tmp, tmp_size);
+        break;
+    case LEPT_STRING:
+        PUTC(&c, '"');
+        tmp_size = v->u.s.len * sizeof(char);
+        memcpy(lept_context_push(&c, tmp_size), v->u.s.s, tmp_size);
+        PUTC(&c, '"');
+        break;
+    case LEPT_ARRAY:
+        PUTC(&c, '[');
+        arr_size = lept_get_array_size(v);
+        for(i = 0; i < arr_size; ++i) {
+            ptr_tmp = lept_to_string(lept_get_array_element(v, i));
+            tmp_size = strlen(ptr_tmp) * sizeof(char);
+            memcpy(lept_context_push(&c, tmp_size), ptr_tmp, tmp_size);
+            free(ptr_tmp);
+            if (i + 1 != arr_size) {
+                PUTC(&c, ',');
+                PUTC(&c, ' ');
+            }
+        }
+        PUTC(&c, ']');
+        break;
+    case LEPT_OBJECT:
+    default:
+        break;
+    }
+    PUTC(&c, '\0');
+    return c.stack;
 }
