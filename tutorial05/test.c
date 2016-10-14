@@ -320,11 +320,30 @@ static void test_access_string() {
     lept_free(&v);
 }
 
+#define TEST_TO_STRING(expect, json)\
+    do {\
+        lept_value v;\
+        char *str;\
+        lept_init(&v);\
+        EXPECT_EQ_INT(LEPT_PARSE_OK, lept_parse(&v, json));\
+        str = lept_to_string(&v);\
+        EXPECT_EQ_STRING(expect, str, strlen(str));\
+        lept_free(&v);\
+        free(str);\
+    } while(0)
+
+static void test_access_to_string() {
+    TEST_TO_STRING("[]", "[]");
+    TEST_TO_STRING("[[]]", "[ [ ] ]");
+    TEST_TO_STRING("[[true], [false], null]", "[[true], [false], null]");
+}
+
 static void test_access() {
     test_access_null();
     test_access_boolean();
     test_access_number();
     test_access_string();
+    test_access_to_string();
 }
 
 int main() {

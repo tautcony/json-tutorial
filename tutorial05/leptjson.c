@@ -373,6 +373,6 @@ char* lept_to_string(const lept_value *v) {
     default:
         break;
     }
-    c.stack[c.top] = '\0';
+    PUTC(&c, '\0');
     return c.stack;
 }
