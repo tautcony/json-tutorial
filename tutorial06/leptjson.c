@@ -357,6 +357,8 @@ void lept_free(lept_value* v) {
                 lept_free(&v->u.o.m[i].v);
                 free(v->u.o.m[i].k);
             }
+            free(v->u.o.m);
+            break;
         default: break;
     }
     v->type = LEPT_NULL;
