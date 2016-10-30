@@ -443,3 +443,67 @@ lept_value* lept_get_object_value(const lept_value* v, size_t index) {
     assert(index < v->u.o.size);
     return &v->u.o.m[index].v;
 }
+
+
+char* lept_to_string(const lept_value *v) {
+    lept_context c;
+    c.stack = NULL;
+    c.size = c.top = 0;
+    size_t i, j, lst_size, tmp_size;
+    char tmp[128], *ptr_tmp;
+    switch (v->type) {
+    case LEPT_NULL:  memcpy(lept_context_push(&c, sizeof(char) * 4), "null", sizeof(char) * 4); break;
+    case LEPT_FALSE: memcpy(lept_context_push(&c, sizeof(char) * 5), "false", sizeof(char) * 5); break;
+    case LEPT_TRUE:  memcpy(lept_context_push(&c, sizeof(char) * 4), "true", sizeof(char) * 4); break;
+    case LEPT_NUMBER:
+        snprintf(tmp, sizeof(tmp), "%f", v->u.n);
+        tmp_size = strlen(tmp) * sizeof(char);
+        memcpy(lept_context_push(&c, tmp_size), tmp, tmp_size);
+        break;
+    case LEPT_STRING:
+        PUTC(&c, '"');
+        tmp_size = v->u.s.len * sizeof(char);
+        memcpy(lept_context_push(&c, tmp_size), v->u.s.s, tmp_size);
+        PUTC(&c, '"');
+        break;
+    case LEPT_ARRAY:
+        PUTC(&c, '[');
+        lst_size = lept_get_array_size(v);
+        for (i = 0; i < lst_size; ++i) {
+            ptr_tmp = lept_to_string(lept_get_array_element(v, i));
+            tmp_size = strlen(ptr_tmp);
+            memcpy(lept_context_push(&c, tmp_size), ptr_tmp, tmp_size);
+            free(ptr_tmp);
+            if (i + 1 != lst_size) {
+                PUTC(&c, ',');
+                PUTC(&c, ' ');
+            }
+        }
+        PUTC(&c, ']');
+        break;
+    case LEPT_OBJECT:
+        PUTC(&c, '{');
+        lst_size = lept_get_object_size(v);
+        for(i = 0; i < lst_size; ++i) {
+            tmp_size = lept_get_object_key_length(v, i);
+            PUTC(&c, '\"');
+            memcpy(lept_context_push(&c, tmp_size), lept_get_object_key(v, i), tmp_size);
+            PUTC(&c, '\"');
+            PUTC(&c, ':');
+            PUTC(&c, ' ');
+            ptr_tmp = lept_to_string(lept_get_object_value(v, i));
+            tmp_size = strlen(ptr_tmp);
+            memcpy(lept_context_push(&c, tmp_size), ptr_tmp, tmp_size);
+            if (i + 1 != lst_size) {
+                PUTC(&c, ',');
+                PUTC(&c, ' ');
+            }
+        }
+        PUTC(&c, '}');
+        break;
+    default:
+        break;
+    }
+    PUTC(&c, '\0');
+    return c.stack;
+}
