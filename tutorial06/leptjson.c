@@ -8,6 +8,7 @@
 #include <math.h>    /* HUGE_VAL */
 #include <stdlib.h>  /* NULL, malloc(), realloc(), free(), strtod() */
 #include <string.h>  /* memcpy() */
+#include <stdio.h>
 
 #ifndef LEPT_PARSE_STACK_INIT_SIZE
 #define LEPT_PARSE_STACK_INIT_SIZE 256
@@ -444,12 +445,11 @@ lept_value* lept_get_object_value(const lept_value* v, size_t index) {
     return &v->u.o.m[index].v;
 }
 
-
 char* lept_to_string(const lept_value *v) {
     lept_context c;
     c.stack = NULL;
     c.size = c.top = 0;
-    size_t i, j, lst_size, tmp_size;
+    size_t i, lst_size, tmp_size;
     char tmp[128], *ptr_tmp;
     switch (v->type) {
     case LEPT_NULL:  memcpy(lept_context_push(&c, sizeof(char) * 4), "null", sizeof(char) * 4); break;
@@ -461,10 +461,10 @@ char* lept_to_string(const lept_value *v) {
         memcpy(lept_context_push(&c, tmp_size), tmp, tmp_size);
         break;
     case LEPT_STRING:
-        PUTC(&c, '"');
+        PUTC(&c, '\"');
         tmp_size = v->u.s.len * sizeof(char);
         memcpy(lept_context_push(&c, tmp_size), v->u.s.s, tmp_size);
-        PUTC(&c, '"');
+        PUTC(&c, '\"');
         break;
     case LEPT_ARRAY:
         PUTC(&c, '[');
