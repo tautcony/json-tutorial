@@ -347,10 +347,31 @@ int lept_parse(lept_value* v, const char* json) {
 }
 
 static void lept_stringify_string(lept_context* c, const char* s, size_t len) {
-    /* ... */
+    size_t i;
+    char ch;
+    PUTC(c, '"');
+    for (i = 0; i < len; ++i) {
+        ch = s[i];
+        switch(ch) {
+            case '"' : PUTS(c, "\\\"", 2); break;
+            case '\\': PUTS(c, "\\\\", 2); break;
+            case '\b': PUTS(c, "\\b" , 2); break;
+            case '\f': PUTS(c, "\\f" , 2); break;
+            case '\n': PUTS(c, "\\n" , 2); break;
+            case '\r': PUTS(c, "\\r" , 2); break;
+            case '\t': PUTS(c, "\\t" , 2); break;
+            default  : 
+            if (ch < 0x20) 
+                sprintf(lept_context_push(c, 6), "\\u00%02x", ch);
+            else PUTC(c, ch);
+            break;
+        }
+    }
+    PUTC(c, '"');
 }
 
 static void lept_stringify_value(lept_context* c, const lept_value* v) {
+    size_t i, list_size;
     switch (v->type) {
         case LEPT_NULL:   PUTS(c, "null",  4); break;
         case LEPT_FALSE:  PUTS(c, "false", 5); break;
@@ -358,10 +379,25 @@ static void lept_stringify_value(lept_context* c, const lept_value* v) {
         case LEPT_NUMBER: c->top -= 32 - sprintf(lept_context_push(c, 32), "%.17g", v->u.n); break;
         case LEPT_STRING: lept_stringify_string(c, v->u.s.s, v->u.s.len); break;
         case LEPT_ARRAY:
-            /* ... */
+            list_size = lept_get_array_size(v);
+            PUTC(c, '[');
+            for (i = 0; i < list_size; ++i) {
+                lept_stringify_value(c, lept_get_array_element(v, i));
+                if (i + 1 != list_size) PUTC(c,',');
+            }
+            PUTC(c, ']');
             break;
         case LEPT_OBJECT:
-            /* ... */
+            list_size = lept_get_object_size(v);
+            PUTC(c, '{');
+            for (i = 0; i < list_size; ++i) {
+                lept_stringify_string(c, lept_get_object_key(v, i),
+                                         lept_get_object_key_length(v, i));
+                PUTC(c, ':');
+                lept_stringify_value(c, lept_get_object_value(v, i));
+                if (i + 1 != list_size) PUTC(c,',');
+            }
+            PUTC(c, '}');
             break;
         default: assert(0 && "invalid type");
     }
